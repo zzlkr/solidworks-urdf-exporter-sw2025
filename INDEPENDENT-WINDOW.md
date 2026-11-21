@@ -78,7 +78,7 @@ For an installer, also pass `-InnoCompiler <ISCC.exe> -OutputDirectory <output d
 
 After building, run `RecoveryTests\Run.ps1 -Compiler <Roslyn csc.exe>`. Use a fresh output directory each time; the default creates a unique directory. The tests exercise real WinForms controls with a simulated IAssemblyWorkspace, write only their test drafts, and do not connect to SolidWorks or modify CAD documents.
 
-The current release passes 80 checks covering draft recovery, UTF-8 names, persistent component identifiers, document isolation, selection and highlighting, export isolation, and URDF structure repair. Native document identity comparison is exercised using separate managed wrappers for a real Windows Scripting.Dictionary COM object; this does not launch or control SolidWorks.
+Version 1.7.11 passes 99 isolated checks covering draft recovery, UTF-8 names, component references, document isolation, selection and highlighting, export isolation, URDF structure repair, coordinate preflight, and mass property handling. Native document identity comparison uses separate managed wrappers for a Windows Scripting.Dictionary COM object.
 
 The release has not completed live SolidWorks section view, in-context editing, and full URDF/STL export regression. The execution environment could not retrieve the running SolidWorks COM object (MK_E_UNAVAILABLE). Validate these operations with a copy of an assembly before production use.
 
