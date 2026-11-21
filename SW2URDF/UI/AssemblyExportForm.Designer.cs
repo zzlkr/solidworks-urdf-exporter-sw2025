@@ -14,6 +14,15 @@
         /// otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
+            if (disposing && recoveryTimer != null)
+            {
+                recoveryTimer.Stop(); recoveryTimer.Dispose(); recoveryTimer = null;
+            }
+            if (disposing)
+            {
+                System.Windows.Forms.Application.ThreadException -= ExceptionHandler;
+                System.AppDomain.CurrentDomain.UnhandledException -= UnhandledException;
+            }
             if (disposing && (components != null))
             {
                 components.Dispose();

@@ -50,6 +50,67 @@ namespace SW2URDF.UI
         private readonly Control[] linkBoxes;
         private readonly LinkNode BaseNode;
 
+        public event Action<LinkNode> RecoverySnapshot;
+        private System.Windows.Forms.Timer recoveryTimer;
+        private string lastRecoveryXml;
+
+        private static LinkNode CopyRecoveryNode(LinkNode source)
+        {
+            var copy = new LinkNode { Link = source.Link.Clone(), Name = source.Name,
+                Text = source.Name, IsBaseNode = source.IsBaseNode };
+            foreach (LinkNode child in source.Nodes) copy.Nodes.Add(CopyRecoveryNode(child));
+            return copy;
+        }
+
+        private void CaptureRecoverySnapshot()
+        {
+            if (RecoverySnapshot == null || AutoUpdatingForm) return;
+            if (previouslySelectedNode != null)
+            {
+                if (panelLinkProperties.Visible) SaveLinkDataFromPropertyBoxes(previouslySelectedNode.Link);
+                else SaveJointDataFromPropertyBoxes(previouslySelectedNode.Link.Joint);
+            }
+            LinkNode snapshot = BuildRecoveryTree(BaseNode, treeViewJointTree.Nodes, panelLinkProperties.Visible);
+            string xml = ConfigurationSerialization.SerializeToString(snapshot);
+            if (xml == lastRecoveryXml) return;
+            RecoverySnapshot(snapshot);
+            lastRecoveryXml = xml;
+        }
+
+        public static LinkNode BuildRecoveryTree(LinkNode baseNode, TreeNodeCollection jointNodes, bool showingLinks)
+        {
+            LinkNode snapshot = CopyRecoveryNode(baseNode);
+            if (!showingLinks && jointNodes.Count > 0)
+            {
+                snapshot.Nodes.Clear();
+                foreach (LinkNode child in jointNodes) snapshot.Nodes.Add(CopyRecoveryNode(child));
+            }
+            return snapshot;
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            try { CaptureRecoverySnapshot(); }
+            catch (Exception error)
+            {
+                logger.Error("Could not save detailed export recovery snapshot", error);
+                if (e.CloseReason == CloseReason.UserClosing)
+                {
+                    MessageBox.Show(this, "当前参数未能存入草稿，请检查输入后再关闭。\r\n" + error.Message, "URDF 草稿");
+                    e.Cancel = true;
+                }
+            }
+            base.OnFormClosing(e);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            if (recoveryTimer != null) { recoveryTimer.Stop(); recoveryTimer.Dispose(); }
+            Application.ThreadException -= ExceptionHandler;
+            AppDomain.CurrentDomain.UnhandledException -= UnhandledException;
+            base.OnFormClosed(e);
+        }
+
         public AssemblyExportForm(SldWorks SwApp, LinkNode node, ExportHelper exporter)
         {
             Application.ThreadException +=
@@ -143,6 +204,14 @@ namespace SW2URDF.UI
         {
             Exporter.UpdateReferenceGeometries();
             FillJointTree();
+            recoveryTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            recoveryTimer.Tick += (s, args) =>
+            {
+                try { CaptureRecoverySnapshot(); }
+                catch (Exception error) { logger.Warn("Detailed export draft pending; last valid snapshot retained", error); }
+            };
+            recoveryTimer.Start();
+            CaptureRecoverySnapshot();
         }
 
         private void ButtonJointNextClick(object sender, EventArgs e)
@@ -250,8 +319,16 @@ namespace SW2URDF.UI
 
         private void FinishExport(bool exportSTL)
         {
+            var session = new DocumentSessionGuard(ActiveSWModel, () => swApp.ActiveDoc,
+                () => ActiveSWModel.GetPathName(), () => ActiveSWModel.IsEditingSelf(),
+                ActiveSWModel.GetPathName(), ActiveSWModel.GetTitle(),
+                (step, error) => logger.Warn("Detailed export status check failed: " + step, error));
+            if (!session.IsAvailable(out string reason))
+            {
+                MessageBox.Show(this, reason + "\r\n草稿仍保留。", "URDF 导出");
+                return;
+            }
             logger.Info("Completing URDF export");
-            SaveConfigTree(ActiveSWModel, BaseNode, false);
 
             // Saving selected node
             LinkNode node = (LinkNode)treeViewLinkProperties.SelectedNode;
@@ -263,7 +340,9 @@ namespace SW2URDF.UI
             Exporter.URDFRobot = CreateRobotFromTreeView(treeViewLinkProperties);
 
             // The UI should prevent these sorts of errors, but just in case
-            string errors = CheckLinksForErrors(Exporter.URDFRobot.BaseLink);
+            string errors = Exporter.URDFRobot.RepairAndValidateStructure();
+            string fieldErrors = CheckLinksForErrors(Exporter.URDFRobot.BaseLink);
+            if (!string.IsNullOrWhiteSpace(fieldErrors)) errors += "\r\n" + fieldErrors;
             if (!string.IsNullOrWhiteSpace(errors))
             {
                 logger.Info("Link errors encountered:\n " + errors);
@@ -273,6 +352,8 @@ namespace SW2URDF.UI
                 MessageBox.Show(message, "URDF Errors");
                 return;
             }
+
+            SaveConfigTree(ActiveSWModel, BaseNode, false);
 
             string warnings = CheckLinksForWarnings(Exporter.URDFRobot.BaseLink);
 

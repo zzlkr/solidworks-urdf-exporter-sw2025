@@ -117,6 +117,14 @@ namespace SW2URDF.URDFExport
                     "Save Export Configuration", MessageBoxButtons.YesNo) == DialogResult.Yes))
                 {
                     SaveDataToModelDoc(swApp, model, newData);
+                    if (GetConfigTreeData(model, out double savedVersion) != newData)
+                        throw new IOException("URDF configuration did not read back correctly from the assembly.");
+                    try { DraftStore.Default.SaveCommitted(model.GetPathName(), newData); }
+                    catch (Exception e)
+                    {
+                        logger.Error("Configuration saved to model, but recovery copy failed", e);
+                        MessageBox.Show("配置已写入装配体，但恢复副本保存失败。请在 SW 中保存文件。\r\n" + e.Message);
+                    }
                 }
             }
         }
@@ -152,7 +160,7 @@ namespace SW2URDF.URDFExport
         /// </summary>
         /// <param name="node">TreeView LinkNode to serialize</param>
         /// <returns>A string serialized utilizing DataContract serialization XML scheme</returns>
-        private static string SerializeToString(LinkNode node)
+        internal static string SerializeToString(LinkNode node)
         {
             SavePropertiesLinkNodeToLink(node);
             Link link = node.UpdateLinkTree(null);
@@ -176,12 +184,19 @@ namespace SW2URDF.URDFExport
             return data;
         }
 
+        internal static bool IsValidConfiguration(string data)
+        {
+            using (var reader = XmlReader.Create(new StringReader(data), new XmlReaderSettings
+            { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 32 * 1024 * 1024 }))
+                return new DataContractSerializer(typeof(Link)).ReadObject(reader) is Link;
+        }
+
         /// <summary>
         /// Read a URDF Link from a serialized string
         /// </summary>
         /// <param name="data">Data string to read into a TreeView LinkNode</param>
         /// <returns>Deserialized LinkNode</returns>
-        private static LinkNode DeserializeFromString(string data)
+        internal static LinkNode DeserializeFromString(string data)
         {
             LinkNode baseNode = null;
             if (!string.IsNullOrWhiteSpace(data))

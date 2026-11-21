@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright (c) 2015 Stephen Brawner
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -160,42 +160,47 @@ namespace SW2URDF.URDFExport
             ExportErrorWhy = "";
             URDFRobot = new Robot();
 
-            progressBar.Start(0, CommonSwOperations.GetCount(baseNode.Nodes) + 1, "Building links");
-            int count = 0;
-
-            progressBar.UpdateProgress(count);
-            progressBar.UpdateTitle("Building link: " + baseNode.Name);
-            
-            Link baseLink = CreateLink(baseNode, 1);
-            if (baseLink == null || !string.IsNullOrWhiteSpace(ExportErrorWhy))
+            if (ComputeInertialValues)
             {
-                MessageBox.Show(ExportErrorWhy);
-                logger.Warn(ExportErrorWhy);
-                progressBar.End();
-                return false;
+                string conflict = LinkMassSelection.FindConflict(EnumerateMassAssignments(baseNode));
+                if (conflict != null) throw new InvalidOperationException(conflict);
             }
-            URDFRobot.SetBaseLink(baseLink);
-            baseNode.Link = baseLink;
 
-            progressBar.End();
-            return true;
+            progressBar.Start(0, CommonSwOperations.GetCount(baseNode.Nodes) + 1, "Building links");
+            try
+            {
+                progressBar.UpdateProgress(0);
+                progressBar.UpdateTitle("Building link: " + baseNode.Name);
+                Link baseLink = CreateLink(baseNode, 1);
+                if (baseLink == null || !string.IsNullOrWhiteSpace(ExportErrorWhy))
+                {
+                    MessageBox.Show(ExportErrorWhy);
+                    logger.Warn(ExportErrorWhy);
+                    return false;
+                }
+                URDFRobot.SetBaseLink(baseLink);
+                baseNode.Link = baseLink;
+                return true;
+            }
+            finally { progressBar.End(); }
+        }
+
+        private static IEnumerable<KeyValuePair<string, string>> EnumerateMassAssignments(LinkNode node)
+        {
+            foreach (Component2 component in node.Link.SWComponents)
+                yield return new KeyValuePair<string, string>(component.Name2, node.Link.Name);
+            foreach (LinkNode child in node.Nodes)
+                foreach (var assignment in EnumerateMassAssignments(child)) yield return assignment;
         }
 
         private Link CreateBaseLinkFromComponents(LinkNode node)
         {
-            // Build the link from the partdoc
-            Link link = CreateLinkFromComponents(null, node);
             if (node.Link.Joint.CoordinateSystemName == "Automatically Generate")
             {
                 CreateBaseRefOrigin(true);
                 node.Link.Joint.CoordinateSystemName = "Origin_global";
-                link.Joint.CoordinateSystemName = node.Link.Joint.CoordinateSystemName;
             }
-            else
-            {
-                link.Joint.CoordinateSystemName = node.Link.Joint.CoordinateSystemName;
-            }
-            return link;
+            return CreateLinkFromComponents(null, node);
         }
 
         //Method which builds an entire link and iterates through.
@@ -238,77 +243,53 @@ namespace SW2URDF.URDFExport
             return link;
         }
 
-        /// <summary>
-        /// Gets the Moment of Inertia of specific component bodies with respect to the coordinate system.
-        /// This reuses some code with other methods because creating the mass property has to happen every time
-        /// </summary>
-        /// <param name="bodies">Component Bodies with which to get the MOI</param>
-        /// <param name="coordinateSystemTransform">The coordinate system to take the MOI with respect to</param>
-        /// <returns>Moment of Inertia array</returns>
-        private double[] GetComponentsMomentOfInertia(List<Body2> bodies, MathTransform coordinateSystemTransform)
-        {
-            MassProperty swMass = ActiveSWModel.Extension.CreateMassProperty();
-            swMass.SetCoordinateSystem(coordinateSystemTransform);
-            bool bRet = swMass.AddBodies(bodies.ToArray());
-            if (!bRet)
-            {
-                throw new Exception("Failed to add bodies to swMass");
-            }
-
-            return (double[])swMass.GetMomentOfInertia(
-            (int)swMomentsOfInertiaReferenceFrame_e.swMomentsOfInertiaReferenceFrame_CenterOfMass);
-        }
-
-        /// <summary>
-        /// Gets the components mass. This reuses some code with other methods because creating the
-        /// mass property has to happen every time
-        /// </summary>
-        /// <param name="bodies">Component Bodies with which to get the mass</param>
-        /// <returns>Mass value of component bodies</returns>
-        private double GetCompomentsMass(List<Body2> bodies)
-        {
-            MassProperty swMass = ActiveSWModel.Extension.CreateMassProperty();
-            bool bRet = swMass.AddBodies(bodies.ToArray());
-            if (!bRet)
-            {
-                throw new Exception("Failed to add bodies to swMass");
-            }
-            return swMass.Mass;
-        }
-
-        /// <summary>
-        /// Gets the Center of Mass with respect to the coordinate system. This reuses some code
-        /// with other similar methods because creating the mass property has to happen every time.
-        /// </summary>
-        /// <param name="bodies">Component bodies with which to get the mass</param>
-        /// <param name="coordinateSystemTransform">Coordinate system take get the centor of mess with respect to</param>
-        /// <returns>3D double array of center of mass</returns>
-        private double[] GetCompomentsCenterOfMass(List<Body2> bodies, MathTransform coordinateSystemTransform)
-        {
-            MassProperty swMass = ActiveSWModel.Extension.CreateMassProperty();
-            swMass.SetCoordinateSystem(coordinateSystemTransform);
-            bool bRet = swMass.AddBodies(bodies.ToArray());
-            if (!bRet)
-            {
-                throw new Exception("Failed to add bodies to swMass");
-            }
-            return swMass.CenterOfMass;
-        }
-
         private void ComputeInertialProperties(Link link)
         {
-            // Get the SolidWorks MathTransform that corresponds to the child coordinate system
-            MathTransform jointTransform = GetCoordinateSystemTransform(link.Joint.CoordinateSystemName);
-            List<Body2> bodies = GetBodies(link.SWComponents);
+            if (link.SWComponents.Count == 0)
+            {
+                // An empty API selection can return the entire assembly's mass.
+                LinkMassSelection.Apply(link, 0, new double[3], new double[9]);
+                return;
+            }
 
-            double[] moment = GetComponentsMomentOfInertia(bodies, jointTransform);
-            link.Inertial.Inertia.SetMomentMatrix(moment);
+            var components = new Dictionary<string, Component2>(StringComparer.OrdinalIgnoreCase);
+            foreach (Component2 component in link.SWComponents)
+                components[component.Name2] = component;
+            string[] paths = LinkMassSelection.WholeComponents(components.Keys);
+            Component2[] items = paths.Select(path => components[path]).ToArray();
 
-            link.Inertial.Mass.Value = GetCompomentsMass(bodies);
+            string frame = link.Joint.CoordinateSystemName;
+            MathTransform transform = string.IsNullOrWhiteSpace(frame) ? null : GetCoordinateSystemTransform(frame);
+            if (!string.IsNullOrWhiteSpace(frame) && transform == null)
+                throw new InvalidOperationException($"Link“{link.Name}”无法读取坐标系“{frame}”。请选择有效坐标系，或开启关节运动学以生成坐标系。");
 
-            double[] centerOfMass = GetCompomentsCenterOfMass(bodies, jointTransform);
-            link.Inertial.Origin.SetXYZ(centerOfMass);
-            link.Inertial.Origin.SetRPY(new double[3] { 0, 0, 0 });
+            SelectionMgr selection = ActiveSWModel.SelectionManager;
+            selection.SuspendSelectionList();
+            try
+            {
+                IMassProperty2 properties = ActiveSWModel.Extension.CreateMassProperty2() as IMassProperty2;
+                if (properties == null)
+                    throw new InvalidOperationException($"Link“{link.Name}”无法读取 SW 组件质量属性。请检查组件是否已解析，或在详细页填写质量属性。");
+
+                properties.UseSystemUnits = true;
+                properties.IncludeHiddenBodiesOrComponents = true;
+                if (transform != null && !properties.SetCoordinateSystem(transform))
+                    throw new InvalidOperationException($"Link“{link.Name}”无法设置质量属性计算坐标系“{frame}”。");
+                // The typed Component2 array is required for the COM selection setter.
+                properties.SelectedItems = items;
+                var actual = (properties.SelectedItems as Array)?.Cast<object>()
+                    .OfType<Component2>().Select(component => component.Name2);
+                if (actual == null || !new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase).SetEquals(actual))
+                    throw new InvalidOperationException($"SW 未接受 Link“{link.Name}”的完整组件选择，无法计算其质量属性。");
+                if (!properties.Recalculate())
+                    throw new InvalidOperationException($"SW 无法重算 Link“{link.Name}”的组件质量属性。");
+
+                double[] moments = properties.GetMomentOfInertia(
+                    (int)swMassPropertyMoment_e.swMassPropertyMomentAboutCenterOfMass) as double[];
+                LinkMassSelection.Apply(link, properties.Mass, properties.CenterOfMass as double[], moments);
+                logger.Info($"Link {link.Name}: calculated mass from {items.Length} component(s): {link.Inertial.Mass.Value:G17} kg");
+            }
+            finally { selection.ResumeSelectionList2(false); }
         }
 
         private static void ComputeVisualCollisionProperties(Link link)
@@ -365,35 +346,6 @@ namespace SW2URDF.URDFExport
             }
 
             return node.Link;
-        }
-
-        private List<Body2> GetBodies(List<Component2> components)
-        {
-            List<Body2> bodies = new List<Body2>();
-            foreach (Component2 comp in components)
-            {
-                // Retrieving the Body2 bodies of the component. Also need to recur through the assembly tree
-                object[] componentBodies =
-                    (object[])comp.GetBodies3((int)swBodyType_e.swSolidBody, out _);
-                if (componentBodies != null)
-                {
-                    foreach (Body2 obj in componentBodies)
-                    {
-                        bodies.Add(obj);
-                    }
-                }
-                object[] children = comp.GetChildren();
-                if (children != null)
-                {
-                    List<Component2> childComponents = new List<Component2>();
-                    foreach (Component2 child in children)
-                    {
-                        childComponents.Add(child);
-                    }
-                    bodies.AddRange(GetBodies(childComponents));
-                }
-            }
-            return bodies;
         }
 
         #endregion SW to Robot and link methods
@@ -922,7 +874,7 @@ namespace SW2URDF.URDFExport
         // coordinate systems that are embedded in subcomponents, and apply the correct transformation to return
         // it to a global transform. It assumes that the coordinate system name is formatted like:
         // "Coordinate System 1 <assy/subassy/comp>" where the full Component2.Name2 is between the <>
-        private MathTransform GetCoordinateSystemTransform(string CoordinateSystemName)
+        internal MathTransform GetCoordinateSystemTransform(string CoordinateSystemName)
         {
             ModelDoc2 ComponentModel = ActiveSWModel;
             MathTransform ComponentTransform = default;

@@ -133,7 +133,7 @@ namespace SW2URDF.URDF
             }
 
             writer.WriteEndElement();
-            if (Joint.ElementContainsData())
+            if (Parent != null && Joint.ElementContainsData())
             {
                 Joint.WriteURDF(writer);
             }

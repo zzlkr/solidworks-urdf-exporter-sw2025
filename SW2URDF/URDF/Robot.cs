@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Xml;
 
@@ -49,6 +50,47 @@ namespace SW2URDF.URDF
             BaseLink = link;
             ChildElements.Clear();
             ChildElements.Add(link);
+        }
+
+        // Saved drafts may contain an old joint on the root or joints without
+        // endpoints when kinematics computation was turned off. The tree is the
+        // authority for connectivity; repair those fields before exporting.
+        public string RepairAndValidateStructure()
+        {
+            if (BaseLink == null) return "根 Link 缺失。";
+            var errors = new List<string>();
+            var linkNames = new HashSet<string>(System.StringComparer.Ordinal);
+            var jointNames = new HashSet<string>(System.StringComparer.Ordinal);
+            RepairLink(BaseLink, null, linkNames, jointNames, errors);
+            return string.Join("\r\n", errors);
+        }
+
+        private static void RepairLink(Link link, Link parent, HashSet<string> linkNames,
+            HashSet<string> jointNames, List<string> errors)
+        {
+            if (link == null) { errors.Add("Link 节点缺失。"); return; }
+            if (string.IsNullOrWhiteSpace(link.Name) || !linkNames.Add(link.Name))
+                errors.Add("Link 名称为空或重复：" + link.Name);
+            link.Parent = parent;
+            if (parent == null)
+            {
+                if (link.Joint != null) link.Joint.Name = "";
+            }
+            else if (link.Joint == null)
+            {
+                errors.Add(link.Name + "：缺少 Joint。");
+            }
+            else
+            {
+                link.Joint.Parent.Name = parent.Name;
+                link.Joint.Child.Name = link.Name;
+                if (string.IsNullOrWhiteSpace(link.Joint.Name) || !jointNames.Add(link.Joint.Name))
+                    errors.Add(link.Name + "：Joint 名称为空或重复。");
+                if (string.IsNullOrWhiteSpace(link.Joint.Type))
+                    errors.Add(link.Name + "：Joint 类型为空。");
+            }
+            foreach (Link child in link.Children)
+                RepairLink(child, link, linkNames, jointNames, errors);
         }
 
         internal string[] GetJointNames(bool includeFixed)

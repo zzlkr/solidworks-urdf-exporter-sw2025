@@ -220,6 +220,8 @@ namespace SW2URDF.SW
 
         public bool DisconnectFromSW()
         {
+            if (configurationWindow != null && !configurationWindow.IsDisposed)
+                configurationWindow.Shutdown();
             RemoveCommandMgr();
             DetachEventHandlers();
 
@@ -291,31 +293,9 @@ namespace SW2URDF.SW
         public void SetupAssemblyExporter()
         {
             ModelDoc2 modeldoc = SwApp.ActiveDoc;
-            logger.Info("Assembly export called for file " + modeldoc.GetTitle());
-            bool saveAndRebuild = false;
-            if (modeldoc.GetSaveFlag())
-            {
-                saveAndRebuild = true;
-                logger.Info("Save is required");
-            }
-            else if (modeldoc.Extension.NeedsRebuild2 !=
-                (int)swModelRebuildStatus_e.swModelRebuildStatus_FullyRebuilt)
-            {
-                saveAndRebuild = true;
-                logger.Info("A rebuild is required");
-            }
-            if (saveAndRebuild ||
-                MessageBox.Show("The SW to URDF exporter requires saving and/or rebuilding before continuing",
-                "Save and rebuild document?", MessageBoxButtons.YesNo) == DialogResult.Yes)
-            {
-                int options = (int)swSaveAsOptions_e.swSaveAsOptions_SaveReferenced |
-                        (int)swSaveAsOptions_e.swSaveAsOptions_Silent;
-                logger.Info("Saving assembly");
-                modeldoc.Save3(options, 0, 0);
-
-                logger.Info("Opening property manager");
-                SetupPropertyManager();
-            }
+            if (modeldoc == null || !(modeldoc is AssemblyDoc))
+                throw new InvalidOperationException("请先打开一个 SolidWorks 装配体。");
+            SetupPropertyManager();
         }
 
         public void AssemblyURDFExporter()
@@ -327,23 +307,32 @@ namespace SW2URDF.SW
             catch (Exception e)
             {
                 logger.Error("An exception was caught when trying to setup the assembly exporter", e);
-                MessageBox.Show("There was a problem setting up the property manager: \n\"" +
-                    e.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
+                MessageBox.Show("URDF 配置窗口未能打开：\r\n" + e.Message +
+                    "\r\n错误码：0x" + e.HResult.ToString("X8") + "\r\n日志：" +
+                    Logger.GetFileName(), "URDF 配置");
             }
         }
 
+        private ExportConfigurationForm configurationWindow;
+
         public void SetupPropertyManager()
         {
-            ExportPropertyManager pm = new ExportPropertyManager((SldWorks)SwApp);
-            logger.Info("Loading config tree");
-            bool success = pm.LoadConfigTree();
-
-            if (success)
+            ModelDoc2 activeModel = SwApp.ActiveDoc;
+            string activePath = activeModel == null ? "" : activeModel.GetPathName();
+            if (configurationWindow != null && !configurationWindow.IsDisposed)
             {
-                logger.Info("Showing property manager");
-                pm.Show();
+                if (configurationWindow.IsForAssembly(activeModel, activePath))
+                {
+                    configurationWindow.WindowState = FormWindowState.Normal;
+                    configurationWindow.Activate();
+                    return;
+                }
+                configurationWindow.Shutdown();
+                configurationWindow = null;
             }
+            configurationWindow = new ExportConfigurationForm(
+                new AssemblyWorkspace((SldWorks)SwApp, activeModel), DraftStore.Default);
+            configurationWindow.Show();
         }
 
         public void SetupPartExporter()

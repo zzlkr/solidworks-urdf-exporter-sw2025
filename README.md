@@ -1,5 +1,13 @@
 # SolidWorks to URDF Exporter
 
+SW2025 自定义版当前为 **1.7.11**，包含独立配置窗口、自动草稿、连续拾取、URDF 结构修复、坐标系预检和覆盖质量属性读取。
+
+- [使用说明](docs/使用说明_v1.7.11.md)
+- [版本问题与修复记录](VERSION_HISTORY.md)
+- [构建及各版技术说明](INDEPENDENT-WINDOW.md)
+
+1.7.11 已完成构建和 99 项隔离检查，真实 SolidWorks 中的整组覆盖值读取及完整导出尚需实机确认。源码基于 [ros/solidworks_urdf_exporter](https://github.com/ros/solidworks_urdf_exporter)，保留原项目 MIT 许可。以下为上游项目说明。
+
 Authored and maintained by [Stephen Brawner](brawner@gmail.com). Past supporters include [PickNik Consulting](https://picknik.ai), Verb Surgical, Open Robotics, and Willow Garage. 
 
 ## Latest Release
