@@ -1,10 +1,10 @@
 # SW2025 independent window and automatic drafts
 
-Custom build 1.7.12.0, based on the user's existing Unicode / coordinate-system fixes to ros/solidworks_urdf_exporter. The original project license is retained. For the maintained Chinese issue and fix history, see [VERSION_HISTORY.md](VERSION_HISTORY.md).
+Custom build 1.7.12.0, based on the user's existing Unicode / coordinate-system fixes to ros/solidworks_urdf_exporter. The original project license is retained. For the list of previously reported issues in Chinese, see [VERSION_HISTORY.md](VERSION_HISTORY.md).
 
 ## 1.7.12 Reference axis lookup
 
-The exporter reads named joint axes directly from their reference features. This avoids clearing the SolidWorks selection or selecting a feature while reading the axis. In SolidWorks 2025 the DVT assembly copy completed the base-to-J2 kinematics and mass calculation three times. Full export stopped at preflight because two saved radar coordinate systems could not be resolved.
+The exporter reads named joint axes directly from their reference features. This avoids clearing the SolidWorks selection or selecting a feature while reading the axis. In SolidWorks 2025 a test assembly completed the affected joint and mass calculations three times. Full export stopped at preflight because saved coordinate-system references could not be resolved.
 
 ## 1.7.11 SolidWorks mass property overrides
 
@@ -16,7 +16,7 @@ Automatic face/edge picks now append the owning component to the SW selection to
 
 ## 1.7.9 joint-frame export preflight
 
-When joint-kinematics computation is disabled, Next now compares each stored joint origin with the transform of its current SolidWorks parent and child coordinate systems. A position gap of at least 2 mm or orientation gap of at least 1 degree prompts before mesh export. The user may enable joint and inertial recomputation, explicitly keep manual values, or cancel. This catches the observed J6 case, where a moved STL frame and stale joint origin differed by about 87.3 mm. Explicit frames are cached during the check; automatically generated frames are skipped. The build and 90 isolated checks pass; live SolidWorks frame lookup and export still need verification.
+When joint-kinematics computation is disabled, Next now compares each stored joint origin with the transform of its current SolidWorks parent and child coordinate systems. A position gap of at least 2 mm or orientation gap of at least 1 degree prompts before mesh export. The user may enable joint and inertial recomputation, explicitly keep manual values, or cancel. This catches a mismatch between the updated mesh frame and the saved joint origin. Explicit frames are cached during the check; automatically generated frames are skipped. The build and 90 isolated checks pass; live SolidWorks frame lookup and export still need verification.
 
 ## 1.7.8 picking and stale-reference cleanup
 
