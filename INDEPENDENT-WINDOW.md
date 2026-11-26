@@ -1,6 +1,10 @@
 # SW2025 independent window and automatic drafts
 
-Custom build 1.7.11.0, based on the user's existing Unicode / coordinate-system fixes to ros/solidworks_urdf_exporter. The original project license is retained. For the maintained Chinese issue and fix history, see [VERSION_HISTORY.md](VERSION_HISTORY.md).
+Custom build 1.7.12.0, based on the user's existing Unicode / coordinate-system fixes to ros/solidworks_urdf_exporter. The original project license is retained. For the maintained Chinese issue and fix history, see [VERSION_HISTORY.md](VERSION_HISTORY.md).
+
+## 1.7.12 Reference axis lookup
+
+The exporter reads named joint axes directly from their reference features. This avoids clearing the SolidWorks selection or selecting a feature while reading the axis. In SolidWorks 2025 the DVT assembly copy completed the base-to-J2 kinematics and mass calculation three times. Full export stopped at preflight because two saved radar coordinate systems could not be resolved.
 
 ## 1.7.11 SolidWorks mass property overrides
 
@@ -78,7 +82,7 @@ For an installer, also pass `-InnoCompiler <ISCC.exe> -OutputDirectory <output d
 
 After building, run `RecoveryTests\Run.ps1 -Compiler <Roslyn csc.exe>`. Use a fresh output directory each time; the default creates a unique directory. The tests exercise real WinForms controls with a simulated IAssemblyWorkspace, write only their test drafts, and do not connect to SolidWorks or modify CAD documents.
 
-Version 1.7.11 passes 99 isolated checks covering draft recovery, UTF-8 names, component references, document isolation, selection and highlighting, export isolation, URDF structure repair, coordinate preflight, and mass property handling. Native document identity comparison uses separate managed wrappers for a Windows Scripting.Dictionary COM object.
+Version 1.7.12 passes 111 isolated checks covering draft recovery, UTF-8 names, component references, document isolation, selection and highlighting, export isolation, URDF structure repair, coordinate preflight, mass property handling, and reference-axis lookup. Native document identity comparison uses separate managed wrappers for a Windows Scripting.Dictionary COM object.
 
 The release has not completed live SolidWorks section view, in-context editing, and full URDF/STL export regression. The execution environment could not retrieve the running SolidWorks COM object (MK_E_UNAVAILABLE). Validate these operations with a copy of an assembly before production use.
 

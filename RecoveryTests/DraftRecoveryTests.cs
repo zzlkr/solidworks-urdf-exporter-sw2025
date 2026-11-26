@@ -103,7 +103,7 @@ class FakeWorkspace : IAssemblyWorkspace
     public void Dispose() { DisposeCalls++; }
 }
 
-class DraftRecoveryTests
+partial class DraftRecoveryTests
 {
     static int passed;
     static string output;
@@ -133,6 +133,7 @@ class DraftRecoveryTests
             Application.EnableVisualStyles();
             StoreTests();
             RobotStructureTests();
+            ReferenceAxisTests();
             LinkMassSelectionTests();
             EditorTests();
             GuardTests();

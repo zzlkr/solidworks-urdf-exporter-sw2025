@@ -4,11 +4,11 @@
 [Setup]
 AppId={{E43E85A9-071D-430A-91B2-84B7AB923170}
 AppName={#MyAppName}
-AppVersion=1.7.11
+AppVersion=1.7.12
 AppVerName=SW2URDF SW2025 - Independent Window and Draft Recovery
 AppPublisher=SW2URDF open-source community (custom build)
 AppPublisherURL=https://github.com/ros/solidworks_urdf_exporter
-VersionInfoVersion=1.7.11.0
+VersionInfoVersion=1.7.12.0
 VersionInfoDescription=SW2URDF SW2025 independent window with automatic draft recovery
 DefaultDirName={autopf}\SOLIDWORKS Corp\SOLIDWORKS\URDFExporter
 UsePreviousAppDir=yes
@@ -18,7 +18,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir={#SourcePath}..\..\..\outputs
-OutputBaseFilename=sw2urdfSetup_SW2025_independent_autosave_v1.7.11
+OutputBaseFilename=sw2urdfSetup_SW2025_independent_autosave_v1.7.12
 SourceDir=..\SW2URDF\bin\x64\Release
 Compression=lzma2
 SolidCompression=yes

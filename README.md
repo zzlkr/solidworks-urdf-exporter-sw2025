@@ -8,11 +8,11 @@
 
 ![独立配置窗口，使用测试机械臂数据](docs/configuration-window.png)
 
-适用于 Windows 64 位和 SolidWorks 2025。安装包、源码压缩包和 SHA-256 校验值见 [v1.7.11 下载页](https://github.com/zzlkr/solidworks-urdf-exporter-sw2025/releases/tag/v1.7.11)。
+适用于 Windows 64 位和 SolidWorks 2025。1.7.12 调整了已有参考轴的读取方式。[1.7.12 使用说明](docs/使用说明_v1.7.12.md) · [已发布版本下载](https://github.com/zzlkr/solidworks-urdf-exporter-sw2025/releases)
 
 ## 安装与使用
 
-1. 关闭 SolidWorks，运行下载页的 `sw2urdfSetup_SW2025_independent_autosave_v1.7.11.exe`。
+1. 关闭 SolidWorks，运行对应版本的安装包。
 2. 重新启动 SolidWorks，打开已保存的装配体，选择「工具 → Export as URDF」。
 3. 配置 Link、关节和坐标系，关联零件。点击「下一步：导出设置」，核对详细参数后导出。
 
@@ -38,4 +38,4 @@
 
 使用 Visual Studio 2022 MSBuild、.NET Framework 4.8 开发工具和 SolidWorks 2025 API。先运行 `nuget restore SW2URDF.sln`，再用 `Build-Independent.ps1` 构建。安装包构建另需 Inno Setup。[构建命令与检查方法](INDEPENDENT-WINDOW.md#build-on-windows) · [NuGet 依赖版本](SW2URDF/packages.config)
 
-v1.7.11 已通过构建和 99 项隔离检查。测试使用模拟装配体工作区，真实 SolidWorks 中的整组覆盖值读取与完整导出仍待实机验证。[版本记录](VERSION_HISTORY.md)
+v1.7.12 已通过构建和 111 项隔离检查，覆盖关节轴方向、嵌套组件和失效引用。在 SW 2025 的 DVT 大吸盘副本上连续三次通过原崩溃步骤。完整导出的预检发现两个雷达坐标系引用失效。[版本记录](VERSION_HISTORY.md)

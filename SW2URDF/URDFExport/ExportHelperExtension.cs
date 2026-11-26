@@ -29,6 +29,7 @@ using SW2URDF.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 
 namespace SW2URDF.URDFExport
@@ -326,12 +327,12 @@ namespace SW2URDF.URDFExport
             if (parent != null && ComputeJointKinematics)
             {
                 logger.Info("Creating joint " + node.Link.Name);
-                bool error = CreateJoint(parent, node.Link);
-                if (error)
+                if (!CreateJoint(parent, node.Link))
                 {
                     logger.Warn(
-                        string.Format("Creating joint from parent {0} to child {1} failed", 
+                        string.Format("Creating joint from parent {0} to child {1} failed",
                             parent.Name, node.Link.Name));
+                    return node.Link;
                 }
             }
 
@@ -853,6 +854,7 @@ namespace SW2URDF.URDFExport
         //Then it needs to transform to the top level assembly (sounds like fun).
         private void EstimateGlobalJointFromRefGeometry(Link child)
         {
+            logger.Info($"Link {child.Name}: reading coordinate system {child.Joint.CoordinateSystemName}");
             MathTransform GlobalCoordsysTransform =
                 GetCoordinateSystemTransform(child.Joint.CoordinateSystemName);
             if (GlobalCoordsysTransform == null)
@@ -866,7 +868,19 @@ namespace SW2URDF.URDFExport
             child.Joint.Origin.SetRPY(MathOps.GetRPY(GlobalCoordsysTransform));
             if (child.Joint.Type != "fixed")
             {
-                EstimateAxis(child.Joint);
+                logger.Info($"Link {child.Name}: reading reference axis {child.Joint.AxisName}");
+                double[] axis;
+                try
+                {
+                    axis = GetRefAxis(child.Joint.AxisName);
+                }
+                catch (Exception e) when (e is COMException || e is InvalidComObjectException || e is InvalidOperationException)
+                {
+                    throw new InvalidOperationException($"Link“{child.Name}”无法读取参考轴“{child.Joint.AxisName}”。{e.Message}", e);
+                }
+                if (axis == null && child.Joint.AxisName != "None")
+                    throw new InvalidOperationException($"Link“{child.Name}”无法读取参考轴“{child.Joint.AxisName}”。请确认该轴有效且组件已解析。");
+                child.Joint.Axis.SetXYZ(axis ?? new double[3]);
             }
         }
 
@@ -947,74 +961,63 @@ namespace SW2URDF.URDFExport
                     nonLocalizedChild.Joint.Axis.GetXYZ(), idealOrigin));
         }
 
-        // Calculates the axis from a Reference Axis in the model
-        private void EstimateAxis(Joint Joint)
-        {
-            Joint.Axis.SetXYZ(EstimateAxis(Joint.AxisName));
-        }
-
-        //This doesn't seem to get the right values for the estimatedAxis. Check the actual values
+        // The axis preview displays zero for "None" or an unavailable reference.
         public double[] EstimateAxis(string axisName)
         {
-            //Select the axis
-            ActiveSWModel.ClearSelection2(true);
-
-            return GetRefAxis(axisName);
+            try
+            {
+                return GetRefAxis(axisName) ?? new double[3];
+            }
+            catch (Exception e) when (e is COMException || e is InvalidComObjectException || e is InvalidOperationException)
+            {
+                logger.Warn("Cannot preview reference axis " + axisName, e);
+                return new double[3];
+            }
         }
 
         private double[] GetRefAxis(string axisStr)
         {
-            ModelDoc2 ComponentModel = ActiveSWModel;
-            string axisName = axisStr;
-            MathTransform ComponentTransform = default;
+            if (string.IsNullOrWhiteSpace(axisStr) || axisStr == "None" || axisStr == "Automatically Generate")
+                return null;
 
-            if (axisStr.Contains("<") && axisStr.Contains(">"))
+            var reference = GetComponentRefGeoNames(axisStr);
+            string axisName = reference["geo"];
+            ModelDoc2 model = ActiveSWModel;
+            MathTransform transform = null;
+            string configuration = null;
+            Feature feature;
+            if (!string.IsNullOrEmpty(reference["component"]))
             {
-                string componentStr = "";
-                int indexFirst = axisStr.IndexOf('<');
-                int indexLast = axisStr.IndexOf('>', indexFirst);
-                if (indexLast > indexFirst)
-                {
-                    componentStr = axisStr.Substring(indexFirst + 1, indexLast - indexFirst - 1);
-                    string CoordinateSystemNameUnTrimmed = axisStr.Substring(0, indexFirst);
-                    axisName = CoordinateSystemNameUnTrimmed.Trim();
-                }
-                AssemblyDoc assy = (AssemblyDoc)ActiveSWModel;
-                object[] components = assy.GetComponents(false);
-                foreach (Component2 comp in components)
-                {
-                    if (comp.Name2 == componentStr)
-                    {
-                        ComponentModel = comp.GetModelDoc2();
-                        ComponentTransform = comp.Transform2;
-                    }
-                }
+                var assembly = model as AssemblyDoc;
+                var instances = assembly?.GetComponents(false) as object[];
+                var component = instances?.OfType<Component2>().FirstOrDefault(c => c.Name2 == reference["component"]);
+                if (component == null || component.IsSuppressed()) return null;
+                // The occurrence returns local geometry from its referenced configuration,
+                // even when the separately opened part shows another configuration.
+                feature = component.FeatureByName(axisName);
+                transform = component.Transform2;
+                if (transform == null) return null;
+                configuration = component.ReferencedConfiguration;
             }
-            //Calculate!
-            double[] axisParams;
-            double[] axisVector = new double[3];
+            else if (model.GetType() == (int)swDocumentTypes_e.swDocASSEMBLY)
+                feature = ((AssemblyDoc)model).FeatureByName(axisName) as Feature;
+            else
+                feature = ((PartDoc)model).FeatureByName(axisName) as Feature;
+            if (feature == null || feature.GetTypeName2() != "RefAxis") return null;
 
-            bool selected =
-                ComponentModel.Extension.SelectByID2(axisName, "AXIS", 0, 0, 0, false, 0, null, 0);
-            if (selected)
-            {
-                Feature feat = ComponentModel.SelectionManager.GetSelectedObject6(1, 0);
-                RefAxis axis = (RefAxis)feat.GetSpecificFeature2();
+            bool current = string.IsNullOrEmpty(configuration);
+            var option = current ? swInConfigurationOpts_e.swThisConfiguration : swInConfigurationOpts_e.swSpecifyConfiguration;
+            bool[] suppressed = feature.IsSuppressed2((int)option, current ? null : new[] { configuration }) as bool[];
+            if (suppressed == null || suppressed.Length != 1 || suppressed[0]) return null;
 
-                // GetRefAxisParams returns {startX, startY, startZ, endX, endY, endZ}
-                axisParams = axis.GetRefAxisParams();
-                axisVector[0] = axisParams[0] - axisParams[3];
-                axisVector[1] = axisParams[1] - axisParams[4];
-                axisVector[2] = axisParams[2] - axisParams[5];
-
-                // Normalize and cleanup
-                axisVector = MathOps.PNorm(axisVector, 2);
-
-                // Transform to proper coordinates
-                axisVector = GlobalAxis(axisVector, ComponentTransform);
-            }
-
-            return axisVector;
+            var axis = feature.GetSpecificFeature2() as RefAxis;
+            var endpoints = axis?.GetRefAxisParams() as double[];
+            if (endpoints == null || endpoints.Length != 6) return null;
+            // Keep the exporter's historical start-minus-end convention for existing joints.
+            var direction = new[] { endpoints[0] - endpoints[3], endpoints[1] - endpoints[4], endpoints[2] - endpoints[5] };
+            if (direction.All(value => value == 0) || direction.Any(value => double.IsNaN(value) || double.IsInfinity(value)))
+                return null;
+            return GlobalAxis(MathOps.PNorm(direction, 2), transform);
         }
 
         //This is called whenever the pull down menu is changed and the axis needs to be
@@ -1315,7 +1318,9 @@ namespace SW2URDF.URDFExport
             {
                 link.Joint.CoordinateSystemName = "Automatically Generate";
             }
-            if (!CheckRefAxisExists(link.Joint.AxisName))
+            // Missing explicit references are reported while reading the named axis. Only a
+            // blank legacy setting requests the same automatic behaviour as "Automatically Generate".
+            if (string.IsNullOrWhiteSpace(link.Joint.AxisName))
             {
                 link.Joint.AxisName = "Automatically Generate";
             }
@@ -1340,34 +1345,6 @@ namespace SW2URDF.URDFExport
                 logger.Warn("Checking coordinate system " + OriginName + " failed", e);
                 return false;
             }
-        }
-
-        private bool CheckRefAxisExists(string AxisName)
-        {
-            if (String.IsNullOrWhiteSpace(AxisName) || AxisName == "Automatically Generate")
-            {
-                return false;
-            }
-            if (AxisName == "None" || ReferenceAxesNames.Contains(AxisName))
-            {
-                return true;
-            }
-            try
-            {
-                double[] axis = GetRefAxis(AxisName);
-                foreach (double value in axis)
-                {
-                    if (Math.Abs(value) > 0.00001)
-                    {
-                        return true;
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                logger.Warn("Checking reference axis " + AxisName + " failed", e);
-            }
-            return false;
         }
 
         private List<Component2> GetParentAncestorComponents(Link node)

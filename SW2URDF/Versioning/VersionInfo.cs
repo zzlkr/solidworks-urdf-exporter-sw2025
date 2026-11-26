@@ -1,3 +1,3 @@
 using System.Reflection;
 
-[assembly: AssemblyInformationalVersion("1.7.11-sw2025-component-mass-overrides.1")]
+[assembly: AssemblyInformationalVersion("1.7.12-sw2025-reference-axis.1")]
