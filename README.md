@@ -38,4 +38,4 @@
 
 使用 Visual Studio 2022 MSBuild、.NET Framework 4.8 开发工具和 SolidWorks 2025 API。先运行 `nuget restore SW2URDF.sln`，再用 `Build-Independent.ps1` 构建。安装包构建另需 Inno Setup。[构建命令与检查方法](INDEPENDENT-WINDOW.md#build-on-windows) · [NuGet 依赖版本](SW2URDF/packages.config)
 
-v1.7.12 已通过构建和 111 项隔离检查，覆盖关节轴方向、嵌套组件和失效引用。在测试装配体上连续三次完成关节和质量计算。整机导出因坐标系引用失效停在预检。[版本问题记录](VERSION_HISTORY.md)
+v1.7.12 已通过构建和 111 项隔离检查，覆盖关节轴方向、嵌套组件和失效引用。在测试装配体上连续三次完成关节和质量计算。整机导出因坐标系引用失效停在预检。[版本问题与修复记录](VERSION_HISTORY.md)

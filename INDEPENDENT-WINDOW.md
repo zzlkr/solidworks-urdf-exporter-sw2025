@@ -1,6 +1,6 @@
 # SW2025 independent window and automatic drafts
 
-Custom build 1.7.12.0, based on the user's existing Unicode / coordinate-system fixes to ros/solidworks_urdf_exporter. The original project license is retained. For the list of previously reported issues in Chinese, see [VERSION_HISTORY.md](VERSION_HISTORY.md).
+Custom build 1.7.12.0, based on the user's existing Unicode / coordinate-system fixes to ros/solidworks_urdf_exporter. The original project license is retained. For the Chinese history of reported issues, fixes, and verification results, see [VERSION_HISTORY.md](VERSION_HISTORY.md).
 
 ## 1.7.12 Reference axis lookup
 
@@ -24,7 +24,7 @@ Interactive picks now read only the latest selected component via UserSelectionP
 
 ## 1.7.7 URDF structure repair
 
-An exported 1.7.6 package contained a stale wheel joint immediately after base_link and the actual wheel joint near the end, giving one duplicate joint name. Another fixed joint initially had empty parent and child references when joint computation was skipped. Export now reconstructs parent/child references from the Link tree, suppresses the root joint, and checks duplicate names. The disabled root-joint controls no longer display stale values. The build and 80 isolated checks pass; full export with live SolidWorks remains to be verified.
+An exported 1.7.6 package contained a stale joint immediately after the root link and the intended joint near the end, giving one duplicate joint name. Another fixed joint initially had empty parent and child references when joint computation was skipped. Export now reconstructs parent/child references from the Link tree, suppresses the root joint, and checks duplicate names. The disabled root-joint controls no longer display stale values. The build and 80 isolated checks pass; full export with live SolidWorks remains to be verified.
 
 ## 1.7.6 export selection isolation
 
